@@ -51,7 +51,11 @@
 
     const fetchData = useCallback(async () => {
       try {
+        const token = window.__HERMES_SESSION_TOKEN__ || "";
         const res = await fetch("/api/plugins/personal-stack-health/services", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
           credentials: "include",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
