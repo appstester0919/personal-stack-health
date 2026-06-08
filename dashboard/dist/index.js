@@ -12,10 +12,14 @@
   "use strict";
 
   const SDK = window.__HERMES_PLUGIN_SDK__;
-  if (!SDK) return;
+  const register = window.__HERMES_PLUGINS__?.register;
+  if (!SDK && !register) {
+    // Neither SDK nor register available — silently exit
+    // Hermes will show "插件脚本未调用 register()" but we can't do anything
+    return;
+  }
 
-  const { React } = SDK;
-  const h = React.createElement;
+  const React = SDK.React;
   const { useState, useEffect, useCallback } = SDK.hooks;
   const { cn } = SDK.utils;
 
@@ -28,20 +32,42 @@
     { name: "Hermes gateway",  port: 9119 },
   ];
 
-  function fmtUptime(s) {
-    if (s == null || s < 0) return "—";
-    if (s < 60) return s + "s";
-    if (s < 3600) return Math.floor(s / 60) + "m";
-    if (s < 86400) return (s / 3600).toFixed(1) + "h";
-    return (s / 86400).toFixed(1) + "d";
+  function statusDot(status) {
+    if (status === "up")    return React.createElement("span", { className: "inline-block h-2 w-2 rounded-full bg-green-500" });
+    if (status === "warning") return React.createElement("span", { className: "inline-block h-2 w-2 rounded-full bg-yellow-500" });
+    if (status === "down")  return React.createElement("span", { className: "inline-block h-2 w-2 rounded-full bg-red-500" });
+    return React.createElement("span", { className: "inline-block h-2 w-2 rounded-full bg-gray-400" });
   }
 
-  function StatusDot({ status }) {
-    const cls = status === "up" ? "bg-emerald-500"
-              : status === "warning" ? "bg-yellow-500"
-              : status === "down" ? "bg-red-500"
-              : "bg-gray-500";
-    return h("span", { className: cn("inline-block h-2.5 w-2.5 rounded-full", cls) });
+  function formatUptime(seconds) {
+    if (!seconds) return "—";
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+
+  function formatRSS(mb) {
+    if (!mb) return "—";
+    return `${(mb / 1024).toFixed(1)} GB`;
+  }
+
+  function StatusRow({ service }) {
+    return React.createElement("tr", { className: "border-t border-border hover:bg-muted/30 transition-colors" },
+      React.createElement("td", { className: "py-2 px-3 font-medium text-sm" }, service.name),
+      React.createElement("td", { className: "py-2 px-3" },
+        React.createElement("div", { className: "flex items-center gap-1.5" },
+          statusDot(service.status),
+          React.createElement("span", { className: "text-xs uppercase tracking-wider" }, service.status || "unknown")
+        )
+      ),
+      React.createElement("td", { className: "py-2 px-3 font-mono text-xs text-muted-foreground" }, service.pid || "—"),
+      React.createElement("td", { className: "py-2 px-3 font-mono text-xs" }, formatRSS(service.rss_mb)),
+      React.createElement("td", { className: "py-2 px-3 text-xs text-muted-foreground hidden md:table-cell" }, formatUptime(service.uptime_seconds)),
+      React.createElement("td", { className: "py-2 px-3 font-mono text-xs text-muted-foreground hidden sm:table-cell" }, service.port || "—")
+    );
   }
 
   function StackHealthPage() {
@@ -72,82 +98,58 @@
     const down = data?.down || 0;
     const overallCls = down > 0 ? "text-red-500"
                      : warn > 0 ? "text-yellow-500"
-                     : data ? "text-emerald-500" : "text-gray-500";
-    const overallText = down > 0 ? `${down} down`
-                      : warn > 0 ? `${warn} warning`
-                      : data ? "all up" : "—";
+                     : "text-green-500";
+    const overallDot = down > 0 ? "bg-red-500" : warn > 0 ? "bg-yellow-500" : "bg-green-500";
 
-    return h("div", { className: "flex flex-col gap-4 p-4 max-w-4xl" },
+    return React.createElement("div", { className: "flex flex-col gap-4 p-4" },
       // Header
-      h("div", { className: "flex items-center justify-between border-b border-border pb-2" },
-        h("h1", { className: "text-lg font-semibold flex items-center gap-2" },
-          h("span", null, "Stack Health"),
-          data && h("span", { className: cn("text-sm font-normal", overallCls) },
-            `(${up + warn} up, ${down} down)`)
+      React.createElement("div", { className: "flex items-center justify-between" },
+        React.createElement("div", { className: "flex items-center gap-2" },
+          React.createElement("span", { className: `inline-block h-2.5 w-2.5 rounded-full ${overallDot}` }),
+          React.createElement("span", { className: "font-bold text-sm uppercase tracking-wider" }, "Stack Health")
         ),
-        h("div", { className: "flex items-center gap-2" },
-          h("button", {
+        React.createElement("div", { className: "flex items-center gap-3 text-xs text-muted-foreground" },
+          React.createElement("span", null, `${up} up · ${warn} warn · ${down} down`),
+          lastUpdated && React.createElement("span", null,
+            `Updated ${lastUpdated.toLocaleTimeString()}`
+          ),
+          React.createElement("button", {
             onClick: fetchData,
-            className: "px-3 py-1 text-xs rounded border border-border hover:bg-accent",
-          }, "Refresh"),
-          h("span", { className: "text-xs text-muted-foreground" },
-            lastUpdated ? "Updated " + lastUpdated.toLocaleTimeString() : "—"
-          )
+            className: "ml-2 px-2 py-1 border border-border rounded text-xs hover:bg-muted transition-colors uppercase tracking-wider"
+          }, "Refresh")
         )
       ),
-
       // Error
-      error && h("div", { className: "border border-red-500/40 bg-red-500/10 text-red-500 text-sm p-3 rounded" },
-        "Failed to load: " + error
+      error && React.createElement("div", { className: "p-3 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-500 font-mono" },
+        `Failed to load: ${error}`
       ),
-
-      // Loading
-      !data && !error && h("div", { className: "text-muted-foreground text-sm p-4 text-center" },
-        "Loading..."
-      ),
-
       // Table
-      data && h("table", { className: "w-full text-sm" },
-        h("thead", null,
-          h("tr", { className: "text-left text-xs text-muted-foreground border-b border-border" },
-            h("th", { className: "px-3 py-2 font-medium" }, "Service"),
-            h("th", { className: "px-3 py-2 font-medium" }, "Status"),
-            h("th", { className: "px-3 py-2 font-medium" }, "PID"),
-            h("th", { className: "px-3 py-2 font-medium" }, "RSS"),
-            h("th", { className: "px-3 py-2 font-medium" }, "Uptime"),
-            h("th", { className: "px-3 py-2 font-medium" }, "Port")
-          )
-        ),
-        h("tbody", null,
-          data.services.map((svc) =>
-            h("tr", { key: svc.name, className: "border-b border-border/50 hover:bg-accent/30" },
-              h("td", { className: "px-3 py-2 font-medium" }, svc.name),
-              h("td", { className: "px-3 py-2" },
-                h("div", { className: "flex items-center gap-2" },
-                  h(StatusDot, { status: svc.status }),
-                  h("span", null, svc.status)
-                )
-              ),
-              h("td", { className: "px-3 py-2 font-mono text-xs text-muted-foreground" },
-                svc.pid ?? "—"
-              ),
-              h("td", { className: "px-3 py-2 font-mono text-xs" },
-                svc.rss_mb != null ? svc.rss_mb.toFixed(1) + " MB" : "—"
-              ),
-              h("td", { className: "px-3 py-2 text-xs text-muted-foreground" },
-                fmtUptime(svc.uptime_s)
-              ),
-              h("td", { className: "px-3 py-2 font-mono text-xs text-muted-foreground" },
-                svc.port ?? "—"
-              )
+      data?.services && React.createElement("div", { className: "overflow-x-auto" },
+        React.createElement("table", { className: "w-full text-sm" },
+          React.createElement("thead", null,
+            React.createElement("tr", { className: "border-b border-border text-xs uppercase tracking-wider text-muted-foreground" },
+              React.createElement("th", { className: "py-2 px-3 text-left font-medium" }, "Service"),
+              React.createElement("th", { className: "py-2 px-3 text-left font-medium" }, "Status"),
+              React.createElement("th", { className: "py-2 px-3 text-left font-medium hidden md:table-cell" }, "PID"),
+              React.createElement("th", { className: "py-2 px-3 text-left font-medium" }, "RSS"),
+              React.createElement("th", { className: "py-2 px-3 text-left font-medium hidden md:table-cell" }, "Uptime"),
+              React.createElement("th", { className: "py-2 px-3 text-left font-medium hidden sm:table-cell" }, "Port")
+            )
+          ),
+          React.createElement("tbody", null,
+            data.services.map(svc =>
+              React.createElement(StatusRow, { key: svc.name, service: svc })
             )
           )
         )
+      ),
+      // Loading
+      !data && !error && React.createElement("div", { className: "flex items-center justify-center py-12 text-muted-foreground text-xs uppercase tracking-wider" },
+        "Loading..."
       )
     );
   }
 
-  if (window.__HERMES_PLUGINS__ && typeof window.__HERMES_PLUGINS__.register === "function") {
-    window.__HERMES_PLUGINS__.register("personal-stack-health", StackHealthPage);
-  }
+  // Register the plugin component
+  register("personal-stack-health", StackHealthPage);
 })();
