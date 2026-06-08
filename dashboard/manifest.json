@@ -3,7 +3,7 @@
   "label": "Stack Health",
   "description": "One-glance health check for personal long-running services. Monitors: ComfyUI_Ideogram (port 8194), n8n (port 5678), OpenClaw gateway (port 18789), prayer pipeline v3 (port 5000), Hermes gateway. Shows PID, port listening status, RSS memory, uptime per service. 30s polling. v0.2.",
   "icon": "Activity",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "tab": {
     "path": "/stack-health",
     "position": "after:example"
