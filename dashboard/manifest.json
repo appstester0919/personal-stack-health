@@ -1,0 +1,14 @@
+{
+  "name": "personal-stack-health",
+  "label": "Stack Health",
+  "description": "One-glance health check for personal long-running services (ComfyUI, n8n, OpenClaw, prayer pipeline, Hermes gateway). v0.1 scaffold.",
+  "icon": "Activity",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/stack-health",
+    "position": "after:example"
+  },
+  "slots": [],
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}
