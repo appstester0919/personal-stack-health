@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stack Health</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --bg2: #1a1a1a;
+      --text: #e0e0e0;
+      --text2: #888;
+      --border: #2a2a2a;
+      --up: #22c55e;
+      --warn: #eab308;
+      --down: #ef4444;
+      --accent: #6366f1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+    h1 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .controls { margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+    button { padding: 6px 14px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+    button:hover { opacity: 0.85; }
+    #last-updated { font-size: 0.8rem; color: var(--text2); }
+    table { width: 100%; border-collapse: collapse; background: var(--bg2); border-radius: 8px; overflow: hidden; }
+    th { text-align: left; padding: 10px 14px; font-size: 0.75rem; color: var(--text2); border-bottom: 1px solid var(--border); }
+    td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #222; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .status-up { background: var(--up); }
+    .status-warning { background: var(--warn); }
+    .status-down { background: var(--down); }
+    .status-unknown { background: var(--text2); }
+    .status-label { font-size: 0.8rem; font-weight: 500; }
+    .status-up .status-label { color: var(--up); }
+    .status-warning .status-label { color: var(--warn); }
+    .status-down .status-label { color: var(--down); }
+    .mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.8rem; color: var(--text2); }
+    .error-box { background: #1f1f1f; border: 1px solid #333; border-radius: 8px; padding: 16px; color: var(--down); font-size: 0.875rem; margin-top: 16px; }
+    .loading { text-align: center; padding: 40px; color: var(--text2); }
+    .uptime { font-size: 0.8rem; color: var(--text2); }
+    @media (max-width: 640px) {
+      th:nth-child(4), td:nth-child(4) { display: none; }
+      th:nth-child(5), td:nth-child(5) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    Stack Health
+    <span class="dot" id="overall-dot" style="background: var(--text2)"></span>
+  </h1>
+
+  <div class="controls">
+    <button id="refresh-btn" onclick="fetchServices()">Refresh</button>
+    <span id="last-updated">—</span>
+  </div>
+
+  <div id="loading" class="loading">Loading...</div>
+  <div id="error" class="error-box" style="display:none"></div>
+  <table id="services-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Service</th>
+        <th>Status</th>
+        <th>PID</th>
+        <th>RSS</th>
+        <th>Uptime</th>
+        <th>Port</th>
+      </tr>
+    </thead>
+    <tbody id="services-body"></tbody>
+  </table>
+
+  <script>
+    const API = '/api/plugins/personal-stack-health/services';
+    let intervalId = null;
+
+    async function fetchServices() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+      document.getElementById('services-table').style.display = 'none';
+
+      try {
+        const res = await fetch(API);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        render(data);
+        document.getElementById('last-updated').textContent =
+          'Updated ' + new Date().toLocaleTimeString();
+      } catch (err) {
+        const errBox = document.getElementById('error');
+        errBox.textContent = 'Failed to load services: ' + err.message;
+        errBox.style.display = 'block';
+      } finally {
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    function render(data) {
+      const tbody = document.getElementById('services-body');
+      tbody.innerHTML = '';
+      let up = 0, warn = 0, down = 0;
+
+      for (const svc of data.services) {
+        if (svc.status === 'up') up++;
+        else if (svc.status === 'warning') warn++;
+        else down++;
+
+        const statusClass = svc.status === 'up' ? 'status-up'
+                          : svc.status === 'warning' ? 'status-warning'
+                          : svc.status === 'down' ? 'status-down' : 'status-unknown';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="font-weight:500">${svc.name}</td>
+          <td>
+            <span class="status-dot ${statusClass}"></span>
+            <span class="status-label">${svc.status}</span>
+          </td>
+          <td class="mono">${svc.pid ?? '—'}</td>
+          <td class="mono">${svc.rss_mb != null ? svc.rss_mb.toFixed(1) + ' MB' : '—'}</td>
+          <td class="uptime">${fmtUptime(svc.uptime_s)}</td>
+          <td class="mono">${svc.port ?? '—'}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      // Overall status dot
+      const overallDot = document.getElementById('overall-dot');
+      if (down > 0) overallDot.style.background = 'var(--down)';
+      else if (warn > 0) overallDot.style.background = 'var(--warn)';
+      else overallDot.style.background = 'var(--up)';
+
+      document.getElementById('services-table').style.display = 'table';
+    }
+
+    function fmtUptime(s) {
+      if (s == null || s < 0) return '—';
+      if (s < 60) return s + 's';
+      if (s < 3600) return Math.floor(s/60) + 'm';
+      if (s < 86400) return (s/3600).toFixed(1) + 'h';
+      return (s/86400).toFixed(1) + 'd';
+    }
+
+    // Initial fetch
+    fetchServices();
+
+    // Auto-refresh every 30s (Q2 default)
+    intervalId = setInterval(fetchServices, 30000);
+  </script>
+</body>
+</html>
