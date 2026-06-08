@@ -1,14 +1,13 @@
 {
   "name": "personal-stack-health",
   "label": "Stack Health",
-  "description": "One-glance health check for personal long-running services. Monitors: ComfyUI_Ideogram (port 8194), n8n (port 5678), OpenClaw gateway (port 18789), prayer pipeline v3 (port 5000), Hermes gateway (port 9119). Shows PID, port listening status, RSS memory, uptime per service. 30s polling. v1.1.",
-  "icon": "Activity",
-  "version": "1.1.0",
+  "description": "One-glance health check for personal long-running services. Monitors: ComfyUI_Ideogram (port 8194), n8n (port 5678), OpenClaw gateway (port 18789), Prayer pipeline v3 (port 5000), Hermes gateway (port 9119). 30s polling, 10s timeout, status + RSS + uptime. Plain React IIFE, no build step.",
+  "icon": "Heart",
+  "version": "1.5.0",
   "tab": {
     "path": "/stack-health",
-    "position": "after:example"
+    "position": "end"
   },
-  "slots": [],
   "entry": "dist/index.js",
   "api": "plugin_api.py"
 }
